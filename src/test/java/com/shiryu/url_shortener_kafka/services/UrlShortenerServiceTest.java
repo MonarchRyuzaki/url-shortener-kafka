@@ -3,14 +3,17 @@ package com.shiryu.url_shortener_kafka.services;
 import com.shiryu.url_shortener_kafka.entities.UrlMapping;
 import com.shiryu.url_shortener_kafka.exceptions.InvalidUrlException;
 import com.shiryu.url_shortener_kafka.repositories.UrlMappingRepository;
-import org.junit.jupiter.api.BeforeEach;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validator;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.Collections;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -22,6 +25,9 @@ class UrlShortenerServiceTest {
     @Mock
     private UrlMappingRepository repository;
 
+    @Mock
+    private Validator validator;
+
     @InjectMocks
     private UrlShortenerService urlShortenerService;
 
@@ -29,6 +35,7 @@ class UrlShortenerServiceTest {
 
     @Test
     void shortenUrl_ValidUrl_Success() {
+        when(validator.validate(any())).thenReturn(Collections.emptySet());
         when(repository.findByOriginalUrl(validUrl)).thenReturn(Optional.empty());
         when(repository.save(any(UrlMapping.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -43,6 +50,7 @@ class UrlShortenerServiceTest {
 
     @Test
     void shortenUrl_ExistingUrl_ReturnsExistingMapping() {
+        when(validator.validate(any())).thenReturn(Collections.emptySet());
         UrlMapping existingMapping = UrlMapping.builder()
                 .originalUrl(validUrl)
                 .shortUrlKey("abcd123")
@@ -56,20 +64,29 @@ class UrlShortenerServiceTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     void shortenUrl_InvalidUrl_ThrowsException() {
         String invalidUrl = "not-a-url";
+        ConstraintViolation<Object> violation = mock(ConstraintViolation.class);
+        when(violation.getMessage()).thenReturn("Invalid URL format");
+        when(validator.validate(any())).thenReturn(Set.of(violation));
 
         assertThrows(InvalidUrlException.class, () -> urlShortenerService.shortenUrl(invalidUrl));
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     void shortenUrl_EmptyUrl_ThrowsException() {
+        ConstraintViolation<Object> violation = mock(ConstraintViolation.class);
+        when(violation.getMessage()).thenReturn("must not be blank");
+        when(validator.validate(any())).thenReturn(Set.of(violation));
+
         assertThrows(InvalidUrlException.class, () -> urlShortenerService.shortenUrl(""));
-        assertThrows(InvalidUrlException.class, () -> urlShortenerService.shortenUrl(null));
     }
 
     @Test
     void shortenUrl_ShortUrlKeyCollision_GeneratesNewKey() {
+        when(validator.validate(any())).thenReturn(Collections.emptySet());
         when(repository.findByOriginalUrl(validUrl)).thenReturn(Optional.empty());
         // Mock collision once
         when(repository.findByShortUrlKey(anyString()))

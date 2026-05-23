@@ -3,13 +3,15 @@ package com.shiryu.url_shortener_kafka.controllers;
 import com.shiryu.url_shortener_kafka.entities.UrlMapping;
 import com.shiryu.url_shortener_kafka.services.UrlShortenerService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.net.URI;
+import java.net.URL;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/v1")
 @RequiredArgsConstructor
 public class UrlShortenerController {
 
@@ -19,7 +21,7 @@ public class UrlShortenerController {
      * Endpoint to shorten a URL.
      * Expects a JSON body: { "url": "http://example.com" }
      */
-    @PostMapping("/shorten")
+    @PostMapping("/api/v1/shorten")
     public ResponseEntity<UrlMapping> shortenUrl(@RequestBody Map<String, String> request) {
         String url = request.get("url");
         UrlMapping mapping = service.shortenUrl(url);
@@ -28,20 +30,19 @@ public class UrlShortenerController {
 
     /**
      * Endpoint for redirection.
-     * GET /api/v1/{shortUrlKey}
+     * GET /{shortUrlKey}
      */
-    @GetMapping("/api/v1/{shortUrlKey}")
+    @GetMapping("/{shortUrlKey}")
     public ResponseEntity<Void> redirectToOriginal(@PathVariable String shortUrlKey) {
-        // TODO: Call service.resolveUrl
-        // TODO: Return 301 or 302 redirect to the original URL
-        throw new UnsupportedOperationException("TODO: Implement redirectToOriginal endpoint");
+        String originalUrl = service.resolveUrl(shortUrlKey);
+        return ResponseEntity.status(HttpStatus.PERMANENT_REDIRECT).location(URI.create(originalUrl)).build();
     }
 
     /**
      * Endpoint to fetch URL statistics.
      * GET /api/v1/stats/{shortUrlKey}
      */
-    @GetMapping("/stats/{shortUrlKey}")
+    @GetMapping("/api/v1/stats/{shortUrlKey}")
     public ResponseEntity<Map<String, Object>> getUrlStats(@PathVariable String shortUrlKey) {
         // TODO: Call service.getUrlStats
         // TODO: Return 200 OK with the stats map

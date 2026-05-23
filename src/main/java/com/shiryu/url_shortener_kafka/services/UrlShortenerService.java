@@ -2,25 +2,27 @@ package com.shiryu.url_shortener_kafka.services;
 
 import com.shiryu.url_shortener_kafka.entities.UrlMapping;
 import com.shiryu.url_shortener_kafka.exceptions.InvalidUrlException;
+import com.shiryu.url_shortener_kafka.exceptions.UrlNotFoundException;
 import com.shiryu.url_shortener_kafka.repositories.UrlMappingRepository;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validator;
 import lombok.RequiredArgsConstructor;
+import org.hibernate.validator.constraints.URL;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
-import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
 public class UrlShortenerService {
 
     private final UrlMappingRepository repository;
+    private final Validator validator;
 //    private final KafkaTemplate<String, String> kafkaTemplate;
-
-    private static final String URL_REGEX = "^(https?|ftp|file)://[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|]";
-    private static final Pattern URL_PATTERN = Pattern.compile(URL_REGEX);
 
     /**
      * Shortens the given original URL.
@@ -45,18 +47,18 @@ public class UrlShortenerService {
                 .shortUrlKey(shortUrlKey)
                 .build();
         UrlMapping savedMapping = repository.save(mapping);
-        // TODO: Produce a Kafka event to a topic (e.g., 'url-shortened')
         return savedMapping;
     }
 
     private void validateUrl(String url) {
-        if (url == null || url.trim().isEmpty()) {
-            throw new InvalidUrlException("URL cannot be empty");
-        }
-        if (!URL_PATTERN.matcher(url).matches()) {
-            throw new InvalidUrlException("Invalid URL format: " + url);
+        UrlContainer container = new UrlContainer(url);
+        Set<ConstraintViolation<UrlContainer>> violations = validator.validate(container);
+        if (!violations.isEmpty()) {
+            throw new InvalidUrlException("Invalid URL: " + violations.iterator().next().getMessage());
         }
     }
+
+    private record UrlContainer(@URL(message = "Invalid URL format") String url) {}
 
     /**
      * Retrieves the original URL and handles click stream logic.
@@ -65,13 +67,23 @@ public class UrlShortenerService {
      */
     public String resolveUrl(String shortUrlKey) {
         // TODO: (Optional) Check cache (e.g., Redis) for the shortUrlKey
-        // TODO: Lookup the UrlMapping in the repository by shortUrlKey
-        // TODO: Check if the URL has expired
+        validateShortUrl(shortUrlKey);
+        Optional<UrlMapping> mapping = repository.findByShortUrlKey(shortUrlKey);
+        if (mapping.isEmpty()) {
+            throw new UrlNotFoundException("No Url found with shortUrlKey: " + shortUrlKey);
+        }
+        if (mapping.get().getExpiresAt() .isBefore(LocalDateTime.now())) {
+            throw new UrlNotFoundException("No Url found with shortUrlKey: " + shortUrlKey);
+        }
         // TODO: Produce a click event to Kafka for asynchronous click count updates
-        // TODO: Return the original URL
-        throw new UnsupportedOperationException("TODO: Implement resolveUrl logic");
+        return mapping.get().getOriginalUrl();
     }
 
+    private void validateShortUrl(String shortUrlKey) {
+        if (shortUrlKey.length() != 7) {
+            throw new InvalidUrlException("Invalid shortUrlKey: " + shortUrlKey);
+        }
+    }
     /**
      * Fetches statistics for a given short URL key.
      */
