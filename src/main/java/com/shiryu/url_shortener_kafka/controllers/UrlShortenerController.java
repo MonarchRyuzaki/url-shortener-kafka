@@ -21,11 +21,8 @@ public class UrlShortenerController {
      */
     @PostMapping("/shorten")
     public ResponseEntity<UrlMapping> shortenUrl(@RequestBody Map<String, String> request) {
-        // TODO: Extract 'url' from request body
         String url = request.get("url");
-        // TODO: Call service.shortenUrl
         UrlMapping mapping = service.shortenUrl(url);
-        // TODO: Return 201 Created or 200 OK with the mapping
         return ResponseEntity.status(201).body(mapping);
     }
 

@@ -1,14 +1,16 @@
 package com.shiryu.url_shortener_kafka.services;
 
 import com.shiryu.url_shortener_kafka.entities.UrlMapping;
+import com.shiryu.url_shortener_kafka.exceptions.InvalidUrlException;
 import com.shiryu.url_shortener_kafka.repositories.UrlMappingRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
@@ -17,17 +19,27 @@ public class UrlShortenerService {
     private final UrlMappingRepository repository;
 //    private final KafkaTemplate<String, String> kafkaTemplate;
 
+    private static final String URL_REGEX = "^(https?|ftp|file)://[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|]";
+    private static final Pattern URL_PATTERN = Pattern.compile(URL_REGEX);
+
     /**
      * Shortens the given original URL.
      * Logic should include validation, checking for existing mappings,
      * generating a unique short key, saving to DB, and producing a Kafka event.
      */
     public UrlMapping shortenUrl(String originalUrl) {
-        // TODO: Validate URL using a validator (e.g., validator library or custom regex)
-        // TODO: Check if the original URL already exists in the repository
-        // TODO: Generate a unique 7-character shortUrlKey (e.g., using NanoId or UUID)
-        String shortUrlKey = UUID.randomUUID().toString().substring(0, 7);
-        // TODO: Save the new UrlMapping to the database
+        validateUrl(originalUrl);
+
+        Optional<UrlMapping> existingMapping = repository.findByOriginalUrl(originalUrl);
+        if (existingMapping.isPresent()) {
+            return existingMapping.get();
+        }
+
+        String shortUrlKey;
+        do {
+            shortUrlKey = UUID.randomUUID().toString().substring(0, 7);
+        } while (repository.findByShortUrlKey(shortUrlKey).isPresent());
+
         UrlMapping mapping = UrlMapping.builder()
                 .originalUrl(originalUrl)
                 .shortUrlKey(shortUrlKey)
@@ -35,6 +47,15 @@ public class UrlShortenerService {
         UrlMapping savedMapping = repository.save(mapping);
         // TODO: Produce a Kafka event to a topic (e.g., 'url-shortened')
         return savedMapping;
+    }
+
+    private void validateUrl(String url) {
+        if (url == null || url.trim().isEmpty()) {
+            throw new InvalidUrlException("URL cannot be empty");
+        }
+        if (!URL_PATTERN.matcher(url).matches()) {
+            throw new InvalidUrlException("Invalid URL format: " + url);
+        }
     }
 
     /**
