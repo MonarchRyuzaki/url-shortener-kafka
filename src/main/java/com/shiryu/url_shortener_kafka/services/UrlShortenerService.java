@@ -8,6 +8,7 @@ import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
 import lombok.RequiredArgsConstructor;
 import org.hibernate.validator.constraints.URL;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -22,7 +23,7 @@ public class UrlShortenerService {
 
     private final UrlMappingRepository repository;
     private final Validator validator;
-//    private final KafkaTemplate<String, String> kafkaTemplate;
+    private final KafkaTemplate<String, String> kafkaTemplate;
 
     /**
      * Shortens the given original URL.
@@ -76,6 +77,7 @@ public class UrlShortenerService {
             throw new UrlNotFoundException("No Url found with shortUrlKey: " + shortUrlKey);
         }
         // TODO: Produce a click event to Kafka for asynchronous click count updates
+        kafkaTemplate.send("url-clicks", shortUrlKey, shortUrlKey);
         return mapping.get().getOriginalUrl();
     }
 

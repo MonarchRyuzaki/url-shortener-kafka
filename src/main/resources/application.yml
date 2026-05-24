@@ -23,14 +23,10 @@ spring:
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      enable-auto-commit: false
       max-poll-records: 500
       fetch-max-wait: 5000
     listener:
       type: batch
-      ack-mode: MANUAL
 
 server:
   port: 8080
-
-kind: Application
